@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voting Site</title>
+    <link rel="stylesheet" type="text/css" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <h1>Vote for Your Favorite Option</h1>
+    <div class="container">
+        <form id="voteForm">
+            <label for="name">Name:</label>
+            <input type="text" id="name" name="name" required><br>
+            <label for="id">ID:</label>
+            <input type="text" id="id" name="id" required><br>
+            <div class="radio-group">
+                <input type="radio" id="option1" name="choice" value="Option1" required>
+                <label for="option1">Option 1</label>
+            </div>
+            <div class="radio-group">
+                <input type="radio" id="option2" name="choice" value="Option2" required>
+                <label for="option2">Option 2</label>
+            </div>
+            <br>
+            <button type="submit">Submit Vote</button>
+        </form>
+        <p id="result"></p>
+    </div>
+
+    <canvas id="votesChart" width="400" height="200"></canvas>
+
+    <script>
+        document.getElementById('voteForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const name = document.getElementById('name').value;
+            const id = document.getElementById('id').value;
+            const choice = document.querySelector('input[name="choice"]:checked').value;
+
+            const payload = { name, id, choice };
+        
+            try {
+                const response = await fetch('https://r497pmgvy4.execute-api.ap-south-1.amazonaws.com/prod/vote', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const result = await response.json();
+                if (response.ok) {
+                    document.getElementById('result').innerText = result.body || 'Vote recorded successfully!';
+                } else {
+                    document.getElementById('result').innerText = result.body; // Display the error message
+                }
+            } catch (error) {
+                document.getElementById('result').innerText = 'An error occurred while submitting your vote.';
+            }
+        });
+
+        const ctx = document.getElementById('votesChart').getContext('2d');
+        const votesChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: ['Option 1', 'Option 2'],
+                datasets: [{
+                    label: '# of Votes',
+                    data: [0, 0],
+                    backgroundColor: ['rgba(255, 99, 132, 0.2)', 'rgba(54, 162, 235, 0.2)'],
+                    borderColor: ['rgba(255, 99, 132, 1)', 'rgba(54, 162, 235, 1)'],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+
+        // Create a WebSocket connection
+        const socket = new WebSocket('wss://f7jons2p19.execute-api.ap-south-1.amazonaws.com/production');
+
+        // Event handler for WebSocket connection opened
+        socket.onopen = function(event) {
+            console.log('WebSocket connected.');
+            // Call updateChart when WebSocket connection is opened
+            updateChart();
+        };
+        
+        // Event handler for WebSocket messages
+        socket.onmessage = function(event) {
+            try {
+                // Parse the received message as JSON   
+                const data = JSON.parse(event.data);
+        
+                // Update the chart data with received vote counts
+                votesChart.data.datasets[0].data = [data.Option1 || 0, data.Option2 || 0];
+        
+                // Update the chart
+                votesChart.update();
+            } catch (error) {
+                console.error('Error parsing WebSocket message:', error);
+            }
+        };
+        
+        // Event handler for WebSocket connection errors
+        socket.onerror = function(error) {
+            console.error('WebSocket error:', error);
+        };
+        
+        // Event handler for WebSocket connection closed
+        socket.onclose = function(event) {
+            console.log('WebSocket closed.');
+        };
+
+        // Function to update the chart
+        function updateChart() {
+            // Send a message to the WebSocket server to request vote counts
+            socket.send(JSON.stringify({ action: 'getVotes' }));
+        }
+    </script>
+</body>
+</html>
